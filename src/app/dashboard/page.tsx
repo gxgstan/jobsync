@@ -1,3 +1,4 @@
+import { format } from "date-fns";
 import {
   getActivityCalendarData,
   getActivityDataForPeriod,
@@ -6,7 +7,9 @@ import {
   getRecentActivities,
   getRecentJobs,
 } from "@/actions/dashboard.actions";
+import { getDailyGoalValues } from "@/actions/dailyGoals.actions";
 import ActivityCalendar from "@/components/dashboard/ActivityCalendar";
+import DailyGoalsCalendar from "@/components/dashboard/DailyGoalsCalendar";
 import JobsActivityCard from "@/components/dashboard/JobsActivityCard";
 import JobsApplied from "@/components/dashboard/JobsAppliedCard";
 import RecentCardToggle from "@/components/dashboard/RecentCardToggle";
@@ -19,6 +22,8 @@ export const metadata: Metadata = {
 };
 
 export default async function Dashboard() {
+  // Server-computed so server and browser agree on "today"
+  const today = format(new Date(), "yyyy-MM-dd");
   const [
     summary7Days,
     summary30Days,
@@ -27,6 +32,7 @@ export default async function Dashboard() {
     weeklyData,
     activitiesData,
     activityCalendarData,
+    dailyGoals,
   ] = await Promise.all([
     getJobsActivitySummary(7),
     getJobsActivitySummary(30),
@@ -35,6 +41,7 @@ export default async function Dashboard() {
     getJobsActivityForPeriod(),
     getActivityDataForPeriod(),
     getActivityCalendarData(),
+    getDailyGoalValues(today.slice(0, 7)),
   ]);
   const activityCalendarDataKeys = Object.keys(activityCalendarData);
   return (
@@ -67,8 +74,14 @@ export default async function Dashboard() {
           ]}
         />
       </div>
-      <div className="@3xl/main:relative @3xl/main:self-stretch">
-        <RecentCardToggle jobs={recentJobs} activities={recentActivities} />
+      <div className="flex flex-col gap-2 @3xl/main:self-stretch">
+        <DailyGoalsCalendar
+          today={today}
+          initialValues={dailyGoals.success ? dailyGoals.data : {}}
+        />
+        <div className="@3xl/main:relative @3xl/main:min-h-64 @3xl/main:flex-1">
+          <RecentCardToggle jobs={recentJobs} activities={recentActivities} />
+        </div>
       </div>
       <div className="w-full col-span-3">
         <ActivityCalendar
