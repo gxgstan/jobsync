@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "react-goal-calendar/style.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -224,4 +225,22 @@
 }
 .rdp-dropdown_year > div {
   @apply hidden;
+}
+
+@layer components {
+  .daily-goals-calendar {
+    --gc-fg: hsl(var(--card-foreground));
+    --gc-card: hsl(var(--card));
+    --gc-muted: hsl(var(--muted));
+    --gc-muted-fg: hsl(var(--muted-foreground));
+    --gc-border: hsl(var(--border));
+    --gc-primary: hsl(var(--primary));
+    /* Donut hues from jobsActivityChart.ts SERIES_COLORS */
+    --gc-ring-1: #2a9d90;
+    --gc-ring-2: #c97e22;
+  }
+  .dark .daily-goals-calendar {
+    --gc-ring-1: #16a89a;
+    --gc-ring-2: #c08438;
+  }
 }
