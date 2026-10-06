@@ -448,3 +448,11 @@ export const AI_USAGE_CONSTANTS = {
   // only warning available.
   CONTEXT_WARN_RATIO: 0.9,
 } as const;
+
+// Hard-coded until goals become a user setting
+export const DAILY_GOALS = {
+  JOBS_TARGET: 5,
+  HOURS_TARGET: 4,
+  // Months browsable before the current one
+  MONTHS_BACK: 11,
+} as const;
