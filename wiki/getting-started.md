@@ -3,7 +3,7 @@ type: tutorial
 title: Getting Started
 description: The first run through JobSync — creating an account, connecting an AI provider, adding a job, and what each sidebar area is for.
 feature: setup
-tags: [setup, first run, sign in, account, ai provider, ollama, sidebar, navigation, dashboard, quick add, shortcuts, ai usage, tokens]
+tags: [setup, first run, sign in, account, ai provider, ollama, sidebar, navigation, dashboard, quick add, shortcuts, ai usage, tokens, goals, daily goals, calendar]
 aliases: [new user, onboarding, first steps, how do I start, set up jobsync, how much ai am i using]
 status: stable
 stale_after: 2027-08-31
@@ -38,6 +38,10 @@ There is a faster route once an AI provider is set: click **Chat AI** in the hea
 The card in the top-left of the Dashboard has six buttons — **Add Job**, **Add Automation**, **Add Task**, **Add Question**, **Add Activity** and **Add Contact** — each opening the same form you would reach by navigating to that area yourself.
 
 Five of them take you to the matching page with the form already open, so you land where the new record will appear. **Add Contact** is the exception: it opens the contact form over the Dashboard, and saving leaves you there rather than on **Library → Contacts**.
+
+## How do I read the Daily Goals calendar?
+
+The calendar at the top right of the Dashboard shows one month, with two rings under each day. The outer ring fills as you apply to jobs that day, towards a target of 5; the inner ring fills with the hours of finished activities started that day, towards 4 hours. The key under the calendar shows which ring is which. A day where both targets are met is shown in bold, and hovering over a day, or tapping it, shows the exact numbers. Use the arrows beside the month name to look back up to 11 months; future days stay empty. The targets are fixed for now.
 
 ## What is each area of the sidebar for?
 
