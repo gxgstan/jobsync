@@ -44,8 +44,8 @@ services:
       RUNNER_PORT: "8787"
       RUNNER_TIMEOUT_MS: "180000"
     volumes:
-      - ${CODEX_ACCOUNT_HOME:?Set the existing Codex account home}:/runtime/codex
-      - ${CLAUDE_ACCOUNT_HOME:?Set the existing Claude config directory}:/runtime/claude
+      - /data/orca/home/.config/jobsync/codex:/runtime/codex
+      - /data/orca/home/.claude:/runtime/claude
     restart: unless-stopped
     init: true
     mem_limit: 1536m

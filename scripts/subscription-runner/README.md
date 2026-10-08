@@ -20,14 +20,17 @@ emitted through the existing SDK stream.
 
 Configure the following in Coolify, as runtime variables:
 
-- `CODEX_ACCOUNT_HOME`: existing managed Codex account home on the Tinyboy host.
-- `CLAUDE_ACCOUNT_HOME`: existing Claude credential directory on the host.
 - `SUBSCRIPTION_RUNNER_TOKEN`: a random secret of at least 32 characters.
 - `AUTH_SECRET`, `ENCRYPTION_KEY`: stable random secrets; retain them with backups.
 - `NEXTAUTH_URL`: the browser URL of JobSync.
 
 Only the runner mounts the account directories. Its UID is 1000, matching their
 host owner; mounts are writable so the official CLIs can renew credentials.
+Coolify rejects variable substitutions in bind sources. The Compose file uses
+`/data/orca/home/.config/jobsync/codex`, a host symlink to the existing managed
+Codex account home, and `/data/orca/home/.claude` for Claude Code. The deployment
+helper verifies or creates the Codex symlink without copying credentials. If the
+managed account changes, update that symlink to its new home before redeploying.
 Reconnect an expired account through its normal Tinyboy/Orca login flow. Avoid
 changing `ENCRYPTION_KEY` after storing API credentials in JobSync.
 
