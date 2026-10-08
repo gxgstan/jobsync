@@ -5,8 +5,10 @@ describe("AI_PROVIDERS", () => {
     expect(AI_PROVIDERS).toContain("openrouter");
   });
 
-  it("contains exactly 5 providers", () => {
-    expect(AI_PROVIDERS).toHaveLength(5);
+  it("contains the original providers and both subscriptions", () => {
+    expect(AI_PROVIDERS).toHaveLength(7);
+    expect(AI_PROVIDERS).toContain("codex");
+    expect(AI_PROVIDERS).toContain("claude-code");
   });
 
   it("contains ollama, openai, deepseek, openrouter, gemini", () => {

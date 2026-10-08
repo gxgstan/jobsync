@@ -1,4 +1,4 @@
-FROM node:20.20.2-alpine AS base
+FROM node:24-alpine AS base
 
 # Install dependencies only when needed
 FROM base AS deps
@@ -47,6 +47,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+COPY scripts/subscription-runner/smoke.mjs /app/subscription-smoke.mjs
 RUN chmod +x /app/docker-entrypoint.sh
 
 EXPOSE 3737

@@ -1,5 +1,6 @@
 import pLimit from "p-limit";
 import db from "@/lib/db";
+import { defaultAiSettings } from "@/lib/ai/default-settings.server";
 import { APP_CONSTANTS } from "@/lib/constants";
 import {
   AiProvider,
@@ -17,7 +18,7 @@ import {
 // other providers can fan out concurrently.
 export function getAutomationMatchLimit(provider: AiProvider) {
   const concurrency =
-    provider === AiProvider.OLLAMA
+    [AiProvider.OLLAMA, AiProvider.CLAUDE_CODE, AiProvider.CODEX].includes(provider)
       ? 1
       : APP_CONSTANTS.AUTOMATION_MATCH_CONCURRENCY;
   return pLimit(concurrency);
@@ -25,6 +26,10 @@ export function getAutomationMatchLimit(provider: AiProvider) {
 
 export function getDefaultModelForProvider(provider: AiProvider): string {
   switch (provider) {
+    case AiProvider.CLAUDE_CODE:
+      return "sonnet";
+    case AiProvider.CODEX:
+      return "default";
     case AiProvider.OLLAMA:
       return OllamaModel.LLAMA3_2;
     case AiProvider.OPENAI:
@@ -44,12 +49,12 @@ export async function getUserAiSettings(userId: string): Promise<AiSettings> {
   });
 
   if (!userSettings) {
-    return defaultUserSettings.ai;
+    return defaultAiSettings();
   }
 
   const settings = JSON.parse(userSettings.settings);
   return {
-    ...defaultUserSettings.ai,
+    ...defaultAiSettings(),
     ...settings.ai,
   };
 }

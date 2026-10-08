@@ -1,5 +1,5 @@
-export type CredentialType = "api-key" | "base-url";
-export type ProviderCategory = "cloud" | "local";
+export type CredentialType = "api-key" | "base-url" | "server-session";
+export type ProviderCategory = "cloud" | "local" | "subscription";
 
 export interface ProviderRegistryEntry {
   id: string;
@@ -21,6 +21,28 @@ export interface ProviderRegistryEntry {
 }
 
 export const PROVIDER_REGISTRY: Record<string, ProviderRegistryEntry> = {
+  "claude-code": {
+    id: "claude-code",
+    displayName: "Claude Code (subscription)",
+    credentialType: "server-session",
+    category: "subscription",
+    modelsEndpoint: "subscriptions/models?provider=claude-code",
+    parseModelsResponse: (data) => data.models ?? [],
+    requiresRunningCheck: false,
+    supportsKeepAlive: false,
+    keyConfig: { placeholder: "", inputType: "text", description: "Uses the Claude account signed in on Tinyboy.", sensitive: false },
+  },
+  codex: {
+    id: "codex",
+    displayName: "Codex (subscription)",
+    credentialType: "server-session",
+    category: "subscription",
+    modelsEndpoint: "subscriptions/models?provider=codex",
+    parseModelsResponse: (data) => data.models ?? [],
+    requiresRunningCheck: false,
+    supportsKeepAlive: false,
+    keyConfig: { placeholder: "", inputType: "text", description: "Uses the ChatGPT account signed in on Tinyboy.", sensitive: false },
+  },
   ollama: {
     id: "ollama",
     displayName: "Ollama",
@@ -117,7 +139,7 @@ export const PROVIDER_REGISTRY: Record<string, ProviderRegistryEntry> = {
   },
 };
 
-export const AI_PROVIDERS = ["ollama", "openai", "deepseek", "openrouter", "gemini"] as const;
+export const AI_PROVIDERS = ["codex", "claude-code", "ollama", "openai", "deepseek", "openrouter", "gemini"] as const;
 export type AiProviderId = (typeof AI_PROVIDERS)[number];
 
 export function getAiProviders(): ProviderRegistryEntry[] {

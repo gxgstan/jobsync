@@ -1,0 +1,64 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    expose:
+      - "3737"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: file:/data/dev.db
+      AUTH_SECRET: ${AUTH_SECRET:?Set a stable AUTH_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Set a stable ENCRYPTION_KEY}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:?Set the public application URL}
+      AUTH_TRUST_HOST: "true"
+      TZ: Europe/Bucharest
+      MCP_ENABLED: "true"
+      SINGLE_USER_MODE: "true"
+      DEFAULT_AI_PROVIDER: codex
+      DEFAULT_AI_MODEL: default
+      SUBSCRIPTION_RUNNER_URL: http://subscription-runner:8787
+      SUBSCRIPTION_RUNNER_TOKEN: ${SUBSCRIPTION_RUNNER_TOKEN:?Set a private runner token}
+    volumes:
+      - jobsync-data:/data
+    depends_on:
+      subscription-runner:
+        condition: service_healthy
+    restart: unless-stopped
+    mem_limit: 1g
+    cpus: 1
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3737"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+  subscription-runner:
+    build:
+      context: .
+      dockerfile: scripts/subscription-runner/Dockerfile
+    environment:
+      SUBSCRIPTION_RUNNER_TOKEN: ${SUBSCRIPTION_RUNNER_TOKEN:?Set a private runner token}
+      CODEX_HOME: /runtime/codex
+      CLAUDE_CONFIG_DIR: /runtime/claude
+      RUNNER_PORT: "8787"
+      RUNNER_TIMEOUT_MS: "180000"
+    volumes:
+      - ${CODEX_ACCOUNT_HOME:?Set the existing Codex account home}:/runtime/codex
+      - ${CLAUDE_ACCOUNT_HOME:?Set the existing Claude config directory}:/runtime/claude
+    restart: unless-stopped
+    init: true
+    mem_limit: 1536m
+    cpus: 1
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+volumes:
+  jobsync-data:

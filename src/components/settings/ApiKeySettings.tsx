@@ -49,7 +49,7 @@ interface ProviderConfig {
   sensitive: boolean;
 }
 
-const PROVIDERS: ProviderConfig[] = getAiProviders().map((entry) => ({
+const PROVIDERS: ProviderConfig[] = getAiProviders().filter((entry) => entry.credentialType !== "server-session").map((entry) => ({
   id: entry.id as ApiKeyProvider,
   name: entry.displayName,
   placeholder: entry.keyConfig.placeholder,

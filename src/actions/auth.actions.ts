@@ -24,6 +24,10 @@ export async function signup(formData: {
 
   const { name, email, password } = parsed.data;
 
+  if (process.env.SINGLE_USER_MODE === "true" && await prisma.user.count() > 0) {
+    return { error: "Registration is closed. Sign in with the existing account." };
+  }
+
   const existingUser = await prisma.user.findUnique({
     where: { email },
   });

@@ -242,7 +242,7 @@ function AiSettings() {
           <SelectTrigger
             id="ai-provider"
             aria-label="Select AI provider"
-            className="w-[180px]"
+            className="w-[280px]"
           >
             <SelectValue placeholder="Select AI Service Provider" />
           </SelectTrigger>
@@ -264,6 +264,11 @@ function AiSettings() {
         <Label className="my-4" htmlFor="ai-model">
           Model
         </Label>
+        {PROVIDER_REGISTRY[selectedModel.provider]?.category === "subscription" && (
+          <p className="mb-3 text-sm text-muted-foreground">
+            Uses your subscription signed in on Tinyboy. No API key is needed. Usage shares your subscription limits.
+          </p>
+        )}
         <div className="flex flex-wrap items-start gap-2">
           <Select
             value={isLoadingModels ? "" : modelValue}
@@ -294,7 +299,7 @@ function AiSettings() {
               <SelectGroup>
                 {fetchedModels.map((model) => (
                   <SelectItem key={model} value={model}>
-                    {model}
+                    {selectedModel.provider === AiProvider.CODEX && model === "default" ? "Tinyboy default" : model}
                   </SelectItem>
                 ))}
               </SelectGroup>

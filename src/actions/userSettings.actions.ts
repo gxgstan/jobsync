@@ -2,6 +2,7 @@
 import prisma from "@/lib/db";
 import { handleError } from "@/lib/utils";
 import { requireUser } from "./shared";
+import { defaultAiSettings } from "@/lib/ai/default-settings.server";
 import {
   UserSettingsData,
   defaultUserSettings,
@@ -22,7 +23,7 @@ export const getUserSettings = async (): Promise<any | undefined> => {
         success: true,
         data: {
           userId: user.id,
-          settings: defaultUserSettings,
+          settings: { ...defaultUserSettings, ai: defaultAiSettings() },
         },
       };
     }
@@ -36,6 +37,7 @@ export const getUserSettings = async (): Promise<any | undefined> => {
         settings: {
           ...defaultUserSettings,
           ...settings,
+          ai: { ...defaultAiSettings(), ...settings.ai },
         },
       },
     };
@@ -66,7 +68,7 @@ export const updateUserSettings = async (
         ...currentSettings,
         ...settings,
         ai: {
-          ...defaultUserSettings.ai,
+          ...defaultAiSettings(),
           ...currentSettings.ai,
           ...settings.ai,
         },
@@ -80,7 +82,7 @@ export const updateUserSettings = async (
       mergedSettings = {
         ...defaultUserSettings,
         ...settings,
-        ai: { ...defaultUserSettings.ai, ...settings.ai },
+        ai: { ...defaultAiSettings(), ...settings.ai },
         display: { ...defaultUserSettings.display, ...settings.display },
       };
     }

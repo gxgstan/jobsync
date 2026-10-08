@@ -80,6 +80,9 @@ export function mapAgentError(
   }
 
   if (status === 401) {
+    if (provider === "claude-code" || provider === "codex") {
+      return `Reconnect your ${provider === "codex" ? "ChatGPT" : "Claude"} subscription on Tinyboy, then try again.`;
+    }
     return `${provider} rejected the API key. Re-save it in Settings.`;
   }
 
