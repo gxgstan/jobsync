@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { generateText, streamText, Output, tool } from "ai";
+import { generateText, streamText, readUIMessageStream, Output, tool, type UIMessage } from "ai";
 import { z } from "zod";
 import { createSubscriptionModel } from "@/lib/ai/subscription-model";
 
@@ -33,6 +33,19 @@ describe("subscription provider with the actual AI SDK", () => {
       output: Output.object({ schema: z.object({ score: z.number(), role: z.string() }) }),
     });
     expect(result.output).toEqual({ score: 91, role: "Engineer" });
+  });
+
+  it("renders a streamed tool proposal as an approval card without executing it", async () => {
+    const execute = vi.fn();
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ text: "", toolCalls: [{ name: "save", arguments: '{"title":"Engineer"}' }] })));
+    const result = streamText({
+      model: createSubscriptionModel("codex", "default"), prompt: "Propose a role",
+      tools: { save: tool({ inputSchema: z.object({ title: z.string() }), needsApproval: true, execute }) },
+    });
+    let finalMessage: UIMessage | undefined;
+    for await (const message of readUIMessageStream({ stream: result.toUIMessageStream(), terminateOnError: true })) finalMessage = message;
+    expect(execute).not.toHaveBeenCalled();
+    expect(finalMessage?.parts).toEqual(expect.arrayContaining([expect.objectContaining({ type: "tool-save", state: "approval-requested", input: { title: "Engineer" } })]));
   });
 
   it("emits a completed SDK stream for nested resume and cover letter generation", async () => {
