@@ -1,9 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
-import { runnerServer, validateRequest, generationPlan, normalizeResponse, runProcess, createLimiter } from './server.mjs';
+import { runnerServer, validateRequest, validateModel, generationPlan, normalizeResponse, runProcess, createLimiter } from './server.mjs';
 
 const input = () => ({ provider: 'codex', model: 'default', prompt: [{ role: 'user', content: [{ type: 'text', text: 'Hello' }] }] });
+const catalog = { models: ['default', 'model-a'], modelDetails: [
+  { id: 'default', displayName: 'Tinyboy default', effortLevels: ['low', 'high'] },
+  { id: 'model-a', displayName: 'Model A', effortLevels: ['low', 'high'], defaultEffort: 'low' },
+] };
 
 test('rejects unknown models and native provider tools before launching a CLI', () => {
   assert.throws(() => validateRequest({ ...input(), model: 'default; touch /tmp/unsafe' }), /Unknown/);
@@ -31,7 +35,7 @@ test('validates structured output instead of passing incomplete responses to the
 test('runner requires its own bearer token and validates requests before execution', async () => {
   let calls = 0;
   const token = 't'.repeat(48);
-  const server = runnerServer({ token, ready: async () => true, execute: async () => { calls++; return { text: 'OK', toolCalls: [] }; } });
+  const server = runnerServer({ token, ready: async () => true, models: async () => catalog, execute: async () => { calls++; return { text: 'OK', toolCalls: [] }; } });
   server.listen(0, '127.0.0.1'); await once(server, 'listening');
   const url = `http://127.0.0.1:${server.address().port}`;
   try {
@@ -43,6 +47,36 @@ test('runner requires its own bearer token and validates requests before executi
     const response = await fetch(`${url}/generate`, { method: 'POST', headers, body: JSON.stringify(input()) });
     assert.equal(response.status, 200); assert.equal((await response.json()).text, 'OK'); assert.equal(calls, 1);
   } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+});
+
+test('serves CLI model capabilities and rejects unavailable models or efforts before generation', async () => {
+  const requests = [], discoveries = [], token = 't'.repeat(48);
+  const server = runnerServer({ token, ready: async () => true,
+    models: async (provider, _signal, options) => { discoveries.push({ provider, options }); return catalog; },
+    execute: async request => { requests.push(request); return { text: 'OK', toolCalls: [] }; },
+  });
+  server.listen(0, '127.0.0.1'); await once(server, 'listening');
+  const url = `http://127.0.0.1:${server.address().port}`, headers = { Authorization: `Bearer ${token}` };
+  const generate = data => fetch(`${url}/generate`, { method: 'POST', headers, body: JSON.stringify({ ...input(), ...data }) });
+  try {
+    assert.equal((await fetch(`${url}/models?provider=codex`)).status, 401);
+    assert.deepEqual(await (await fetch(`${url}/models?provider=codex&refresh=1`, { headers })).json(), catalog);
+    assert.deepEqual(discoveries[0], { provider: 'codex', options: { refresh: true } });
+    assert.equal((await generate({ model: 'unavailable-model' })).status, 400);
+    assert.equal((await generate({ model: 'model-a', effort: 'ultra' })).status, 400);
+    assert.equal((await generate({ effort: 'high"; shell=true' })).status, 400);
+    assert.equal(requests.length, 0);
+    assert.equal((await generate({ model: 'model-a', effort: 'high' })).status, 200);
+    assert.equal(requests[0].model, 'model-a'); assert.equal(requests[0].effort, 'high');
+    assert.equal((await generate({ model: 'model-a' })).status, 200);
+    assert.equal(requests[1].effort, 'low');
+  } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+});
+
+test('retains the shared Codex default and rejects effort for a model without support', () => {
+  assert.equal(validateModel(validateRequest(input()), catalog).effort, undefined);
+  const withoutEffort = { modelDetails: [{ id: 'haiku-old', effortLevels: [] }] };
+  assert.throws(() => validateModel({ provider: 'claude-code', model: 'haiku-old', effort: 'high' }, withoutEffort), /effort level is unavailable/);
 });
 
 test('serializes each subscription and cancels queued work without executing it', async () => {

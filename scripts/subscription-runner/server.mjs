@@ -5,8 +5,8 @@ import { readFile, writeFile, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { PROVIDERS, validModel, validEffort, subscriptionCatalog, CODEX_CONFIG, CLAUDE_OPTIONS, cliEnvironment } from './catalog.mjs';
 
-export const MODELS = { codex: ['default'], 'claude-code': ['sonnet', 'opus', 'haiku'] };
 const MAX_BODY = 1024 * 1024;
 const MAX_OUTPUT = 2 * 1024 * 1024;
 
@@ -15,9 +15,10 @@ export class RunnerError extends Error {
 }
 
 export function validateRequest(input) {
-  if (!input || !Object.hasOwn(MODELS, input.provider) || !MODELS[input.provider].includes(input.model)) {
+  if (!input || !PROVIDERS.includes(input.provider) || !validModel(input.model)) {
     throw new RunnerError(400, 'Unknown subscription provider or model.');
   }
+  if (input.effort !== undefined && !validEffort(input.effort)) throw new RunnerError(400, 'Invalid effort level.');
   if (!Array.isArray(input.prompt) || !input.prompt.length || input.prompt.length > 200) {
     throw new RunnerError(400, 'Invalid conversation.');
   }
@@ -38,6 +39,15 @@ export function validateRequest(input) {
   if (['tool', 'required'].includes(input.toolChoice?.type) && !tools.length) throw new RunnerError(400, 'Required tool is unavailable.');
   if (input.responseFormat && !['text', 'json'].includes(input.responseFormat.type)) throw new RunnerError(400, 'Invalid response format.');
   return { ...input, tools };
+}
+
+export function validateModel(request, catalog) {
+  const model = catalog.modelDetails.find(m => m.id === request.model);
+  if (!model) throw new RunnerError(400, 'Selected subscription model is unavailable. Refresh models in AI Settings.');
+  if (request.effort !== undefined && !model.effortLevels.includes(request.effort)) throw new RunnerError(400, 'Selected effort level is unavailable for this model. Check AI Settings.');
+  // Explicit Codex models use their own default, not another model's global
+  // effort from the shared account config. The legacy default retains it.
+  return { ...request, effort: request.effort ?? (request.provider === 'codex' && request.model !== 'default' ? model.defaultEffort : undefined) };
 }
 
 export function generationPlan(request) {
@@ -143,11 +153,11 @@ export async function runCli(request, signal) {
   const dir = await mkdtemp(join(tmpdir(), 'jobsync-inference-'));
   try {
     const { prompt, schema } = generationPlan(request);
-    const env = {};
     // No API keys, proxy settings, agent hooks, or launch tokens are inherited.
-    for (const key of ['PATH', 'HOME', 'LANG', 'CODEX_HOME', 'CLAUDE_CONFIG_DIR']) if (process.env[key]) env[key] = process.env[key];
+    const env = cliEnvironment();
     if (request.provider === 'claude-code') {
-      const args = ['-p', '--model', request.model, '--output-format', 'json', '--tools', '', '--disable-slash-commands', '--no-session-persistence', '--setting-sources', '', '--settings', '{"disableAllHooks":true}', '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}'];
+      const args = ['-p', '--model', request.model, '--output-format', 'json', ...CLAUDE_OPTIONS];
+      if (request.effort) args.push('--effort', request.effort);
       if (schema) args.push('--json-schema', JSON.stringify(schema));
       const output = JSON.parse(await runProcess('claude', args, prompt, signal, dir, env));
       if (output.is_error) throw cliError(JSON.stringify(output));
@@ -159,13 +169,9 @@ export async function runCli(request, signal) {
     }
     const outputFile = join(dir, 'response.txt');
     const args = ['exec', '--skip-git-repo-check', '--json', '--ephemeral', '--sandbox', 'read-only', '--output-last-message', outputFile];
-    for (const config of [
-      'approval_policy="never"', 'features.hooks=false', 'features.apps=false',
-      'features.shell_tool=false', 'features.unified_exec=false',
-      'features.multi_agent=false', 'features.multi_agent_v2=false',
-      'features.plugins=false', 'features.image_generation=false',
-      'features.shell_snapshot=false', 'web_search="disabled"', 'mcp_servers={}',
-    ]) args.push('-c', config);
+    for (const config of CODEX_CONFIG) args.push('-c', config);
+    if (request.model !== 'default') args.push('--model', request.model);
+    if (request.effort) args.push('-c', `model_reasoning_effort=${JSON.stringify(request.effort)}`);
     if (schema) {
       const schemaFile = join(dir, 'schema.json');
       await writeFile(schemaFile, JSON.stringify(schema), { mode: 0o600 });
@@ -198,7 +204,7 @@ export function createLimiter(maxWaiting = 4) {
   });
 }
 
-export function runnerServer({ token, execute = runCli, ready = accountReady, timeoutMs = 180_000 } = {}) {
+export function runnerServer({ token, execute = runCli, ready = accountReady, models = subscriptionCatalog, timeoutMs = 180_000 } = {}) {
   if (!token || token.length < 32) throw new Error('Set SUBSCRIPTION_RUNNER_TOKEN to at least 32 characters.');
   const exclusive = createLimiter();
   return createServer(async (req, res) => {
@@ -217,9 +223,10 @@ export function runnerServer({ token, execute = runCli, ready = accountReady, ti
       if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) throw new RunnerError(401, 'Runner authentication required.');
       if (url.pathname === '/models' && req.method === 'GET') {
         const provider = url.searchParams.get('provider');
-        if (!Object.hasOwn(MODELS, provider)) throw new RunnerError(400, 'Unknown subscription provider.');
+        if (!PROVIDERS.includes(provider)) throw new RunnerError(400, 'Unknown subscription provider.');
         if (!await ready(provider)) throw new RunnerError(401, 'Reconnect the subscription on Tinyboy.');
-        send(200, { models: MODELS[provider] }); return;
+        const signal = AbortSignal.any([abort.signal, AbortSignal.timeout(25_000)]);
+        send(200, await models(provider, signal, { refresh: url.searchParams.get('refresh') === '1' })); return;
       }
       if (url.pathname !== '/generate' || req.method !== 'POST') { send(404, { error: 'Not found.' }); return; }
       let body = '';
@@ -230,8 +237,9 @@ export function runnerServer({ token, execute = runCli, ready = accountReady, ti
       let input;
       try { input = JSON.parse(body); } catch { throw new RunnerError(400, 'Invalid JSON request.'); }
       const request = validateRequest(input);
+      if (!await ready(request.provider)) throw new RunnerError(401, 'Reconnect the subscription on Tinyboy.');
       const signal = AbortSignal.any([abort.signal, AbortSignal.timeout(timeoutMs)]);
-      const result = await exclusive(request.provider, signal, () => execute(request, signal));
+      const result = await exclusive(request.provider, signal, async () => execute(validateModel(request, await models(request.provider, signal)), signal));
       send(200, result);
     } catch (error) {
       const status = error?.name === 'TimeoutError' ? 504 : error instanceof RunnerError ? error.status : 502;

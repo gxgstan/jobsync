@@ -51,7 +51,7 @@ ${removeHtmlTags(job.description)}
 
     const provider = aiSettings.provider;
     const modelName = aiSettings.model || getDefaultModelForProvider(provider);
-    const model = await getModel(provider, modelName, userId);
+    const model = await getModel(provider, modelName, userId, aiSettings.effort);
 
     const promptText = buildAutomationJobMatchPrompt(resumeText, jobText);
 

@@ -11,6 +11,14 @@ export type {
 export interface AiModel {
   provider: AiProvider;
   model: string | undefined;
+  effort?: string;
+}
+
+export interface SubscriptionModelInfo {
+  id: string;
+  displayName: string;
+  effortLevels: string[];
+  defaultEffort?: string;
 }
 
 // Provider enum - extensible for future providers

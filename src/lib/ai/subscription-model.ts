@@ -1,6 +1,7 @@
 import "server-only";
 
 import { APICallError } from "ai";
+import type { SubscriptionModelInfo } from "@/models/ai.model";
 import type {
   LanguageModelV3,
   LanguageModelV3CallOptions,
@@ -17,15 +18,18 @@ export function subscriptionConfig() {
   return { url: url.replace(/\/+$/, ""), token };
 }
 
-export async function subscriptionModels(provider: SubscriptionProvider) {
+export async function subscriptionModels(provider: SubscriptionProvider, refresh = false) {
   const { url, token } = subscriptionConfig();
-  const response = await fetch(`${url}/models?provider=${provider}`, {
+  const response = await fetch(`${url}/models?provider=${provider}${refresh ? "&refresh=1" : ""}`, {
     headers: { Authorization: `Bearer ${token}` },
-    signal: AbortSignal.timeout(10_000),
+    signal: AbortSignal.timeout(30_000),
     cache: "no-store",
   });
-  if (!response.ok) throw new Error("Subscription sign-in is unavailable on the server");
-  return response.json() as Promise<{ models: string[] }>;
+  if (!response.ok) {
+    const detail = await response.json().catch(() => null);
+    throw new Error(detail?.error || "Subscription model discovery is unavailable on the server");
+  }
+  return response.json() as Promise<{ models: string[]; modelDetails: SubscriptionModelInfo[] }>;
 }
 
 /** Keep all application tool execution and approval in the AI SDK. The runner
@@ -33,6 +37,7 @@ export async function subscriptionModels(provider: SubscriptionProvider) {
 export function createSubscriptionModel(
   provider: SubscriptionProvider,
   modelId: string,
+  effort?: string,
 ): LanguageModelV3 {
   const { url, token } = subscriptionConfig();
 
@@ -45,6 +50,7 @@ export function createSubscriptionModel(
       body: JSON.stringify({
         provider,
         model: modelId,
+        effort,
         prompt: options.prompt,
         tools: options.tools,
         toolChoice: options.toolChoice,
@@ -54,6 +60,7 @@ export function createSubscriptionModel(
     });
     if (!response.ok) {
       const messages: Record<number, string> = {
+        400: "The selected subscription model or effort is unavailable. Refresh AI Settings.",
         401: "Reconnect the subscription account on Tinyboy.",
         429: "The subscription is busy or has reached its usage limit. Try again later.",
         504: "The subscription request took too long. Try again.",

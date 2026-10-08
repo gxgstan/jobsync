@@ -1,9 +1,6 @@
-import { AiProvider } from "./ai.model";
+import { AiProvider, type AiModel } from "./ai.model";
 
-export interface AiSettings {
-  provider: AiProvider;
-  model: string | undefined;
-}
+export type AiSettings = AiModel;
 
 export interface DisplaySettings {
   theme: "light" | "dark" | "system";

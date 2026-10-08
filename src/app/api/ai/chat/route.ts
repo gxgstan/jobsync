@@ -135,7 +135,7 @@ export const POST = async (req: NextRequest) => {
 
   let model;
   try {
-    model = await getModel(provider, modelName, userId);
+    model = await getModel(provider, modelName, userId, ai?.effort);
   } catch (error) {
     return NextResponse.json({ error: mapAgentError(error, errorContext) }, { status: 503 });
   }

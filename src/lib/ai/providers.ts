@@ -9,9 +9,10 @@ export async function getModel(
   provider: ProviderType,
   modelName: string,
   userId?: string,
+  effort?: string,
 ) {
   if (provider === "claude-code" || provider === "codex") {
-    return createSubscriptionModel(provider, modelName);
+    return createSubscriptionModel(provider, modelName, effort);
   }
   const entry = PROVIDER_REGISTRY[provider];
   if (!entry) throw new Error(`Unknown AI provider: ${provider}`);

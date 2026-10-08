@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AiModel,
   AiProvider,
@@ -7,6 +7,7 @@ import {
   OpenaiModel,
   DeepseekModel,
   GeminiModel,
+  type SubscriptionModelInfo,
 } from "@/models/ai.model";
 import {
   PROVIDER_REGISTRY,
@@ -32,6 +33,8 @@ function AiSettings() {
   const { isOpen: isAgentChatOpen, refreshPreflight } = useAgentChat();
   const [selectedModel, setSelectedModel] = useState<AiModel>(defaultModel);
   const [fetchedModels, setFetchedModels] = useState<string[]>([]);
+  const [modelDetails, setModelDetails] = useState<SubscriptionModelInfo[]>([]);
+  const modelRequest = useRef<AbortController | undefined>(undefined);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -42,12 +45,13 @@ function AiSettings() {
 
   const setSelectedProvider = (provider: AiProvider) => {
     setSelectedModel({ provider, model: undefined });
+    setModelDetails([]);
     setFetchError("");
     setConnectionError("");
   };
 
   const setSelectedProviderModel = (model: string) => {
-    setSelectedModel({ ...selectedModel, model });
+    setSelectedModel((prev) => ({ ...prev, model, effort: undefined }));
   };
 
   useEffect(() => {
@@ -61,6 +65,7 @@ function AiSettings() {
           setSelectedModel({
             provider: aiSettings.provider || defaultModel.provider,
             model: aiSettings.model,
+            effort: aiSettings.effort,
           });
         }
       } catch (error) {
@@ -87,13 +92,15 @@ function AiSettings() {
   };
 
   const fetchModelsForProvider = useCallback(
-    (provider: AiProvider) => {
+    (provider: AiProvider, refresh = false) => {
+      modelRequest.current?.abort();
       const entry = PROVIDER_REGISTRY[provider];
       if (!entry) return () => {};
 
       if (!entry.modelsEndpoint) {
         const fallbackModels = getFallbackModels(provider);
         setFetchedModels(fallbackModels);
+        setModelDetails([]);
         setSelectedModel((prev) =>
           prev.model && !fallbackModels.includes(prev.model)
             ? { ...prev, model: undefined }
@@ -103,7 +110,14 @@ function AiSettings() {
       }
 
       const fallback = getFallbackModels(provider);
-      let cancelled = false;
+      const controller = new AbortController();
+      modelRequest.current = controller;
+      const errorMessage = entry.category === "local"
+        ? `Failed to fetch ${entry.displayName} models. Make sure ${entry.displayName} is running.`
+        : entry.category === "subscription"
+          ? `Failed to load ${entry.displayName} models. Retry or reconnect the subscription on Tinyboy.`
+          : `Failed to fetch ${entry.displayName} models. Please check your API key in API Keys settings.`;
+      setModelDetails([]);
       setIsLoadingModels(true);
       setFetchError("");
       setConnectionError("");
@@ -113,21 +127,20 @@ function AiSettings() {
           if (entry.category === "local") {
             const connResult = await checkOllamaConnection(provider);
             if (!connResult.isConnected) {
-              if (!cancelled) {
+              if (!controller.signal.aborted) {
                 setFetchedModels(fallback);
                 setConnectionError(connResult.error || "Ollama is not reachable.");
               }
               return;
             }
           }
-          const response = await fetch(`/api/ai/${entry.modelsEndpoint}`);
+          const endpoint = `/api/ai/${entry.modelsEndpoint}${refresh && entry.category === "subscription" ? "&refresh=1" : ""}`;
+          const response = await fetch(endpoint, { signal: controller.signal });
           if (!response.ok) {
             const errorData = await response.json().catch(() => null);
             const errorMsg = errorData?.error
-              || (entry.category === "local"
-                ? `Failed to fetch ${entry.displayName} models. Make sure ${entry.displayName} is running.`
-                : `Failed to fetch ${entry.displayName} models. Please check your API key in API Keys settings.`);
-            if (!cancelled) {
+              || errorMessage;
+            if (!controller.signal.aborted) {
               setFetchError(errorMsg);
               setFetchedModels(fallback);
             }
@@ -136,41 +149,40 @@ function AiSettings() {
           const data = await response.json();
           const models = entry.parseModelsResponse?.(data) ?? [];
           const finalModels = models.length > 0 ? models : fallback;
-          if (!cancelled) {
+          const details: SubscriptionModelInfo[] = entry.category === "subscription" ? data.modelDetails ?? [] : [];
+          if (!controller.signal.aborted) {
             setFetchedModels(finalModels);
-            setSelectedModel((prev) =>
-              prev.model && !finalModels.includes(prev.model)
-                ? { ...prev, model: undefined }
-                : prev,
-            );
+            setModelDetails(details);
+            setSelectedModel((prev) => {
+              if (prev.model && !finalModels.includes(prev.model)) return { ...prev, model: undefined, effort: undefined };
+              if (prev.effort && !details.find(m => m.id === prev.model)?.effortLevels.includes(prev.effort)) return { ...prev, effort: undefined };
+              return prev;
+            });
           }
         } catch (error) {
-          console.error(`Error fetching ${entry.displayName} models:`, error);
-          if (!cancelled) {
+          if (!controller.signal.aborted) {
+            console.error(`Error fetching ${entry.displayName} models:`, error);
             setFetchedModels(fallback);
-            setFetchError(
-              entry.category === "local"
-                ? `Failed to fetch ${entry.displayName} models. Make sure ${entry.displayName} is running.`
-                : `Failed to fetch ${entry.displayName} models. Please check your API key in API Keys settings.`,
-            );
+            setFetchError(errorMessage);
           }
         } finally {
-          if (!cancelled) setIsLoadingModels(false);
+          if (!controller.signal.aborted) setIsLoadingModels(false);
         }
       })();
 
-      return () => { cancelled = true; };
+      return () => controller.abort();
     },
     [],
   );
 
   useEffect(() => {
     if (!isInitialized) return;
-    return fetchModelsForProvider(selectedModel.provider);
+    fetchModelsForProvider(selectedModel.provider);
+    return () => modelRequest.current?.abort();
   }, [selectedModel.provider, isInitialized, fetchModelsForProvider]);
 
   const retryConnection = () => {
-    fetchModelsForProvider(selectedModel.provider);
+    fetchModelsForProvider(selectedModel.provider, true);
   };
 
   const saveModelSettings = async () => {
@@ -183,6 +195,7 @@ function AiSettings() {
       const result = await updateAiSettings({
         provider: selectedModel.provider,
         model: selectedModel.model,
+        effort: selectedModel.effort,
       });
       if (result.success) {
         toastSuccess("AI Settings saved successfully.", "Saved!");
@@ -205,6 +218,9 @@ function AiSettings() {
     selectedModel.model && fetchedModels.includes(selectedModel.model)
       ? selectedModel.model
       : "";
+  const selectedInfo = modelDetails.find(model => model.id === modelValue);
+  const effortLevels = selectedInfo?.effortLevels ?? [];
+  const effortLabel = (effort: string) => effort === "xhigh" ? "Extra high" : effort.charAt(0).toUpperCase() + effort.slice(1);
 
   if (isLoadingSettings) {
     return (
@@ -278,7 +294,7 @@ function AiSettings() {
             <SelectTrigger
               id="ai-model"
               aria-label="Select Model"
-              className="w-[180px]"
+              className="w-full max-w-[320px]"
             >
               {/* a flex row here must nest inside SelectValue's span, which the
                   trigger's [&>span]:line-clamp-1 outranks */}
@@ -299,16 +315,21 @@ function AiSettings() {
               <SelectGroup>
                 {fetchedModels.map((model) => (
                   <SelectItem key={model} value={model}>
-                    {selectedModel.provider === AiProvider.CODEX && model === "default" ? "Tinyboy default" : model}
+                    {modelDetails.find(info => info.id === model)?.displayName ?? (selectedModel.provider === AiProvider.CODEX && model === "default" ? "Tinyboy default" : model)}
                   </SelectItem>
                 ))}
               </SelectGroup>
             </SelectContent>
           </Select>
           {fetchError && (
-            <div className="flex items-start gap-1 text-red-600 text-sm mt-2">
-              <XCircle className="h-4 w-4 shrink-0 mt-0.5" />
-              <span>{fetchError}</span>
+            <div className="flex items-start gap-2 mt-2">
+              <Button variant="outline" size="sm" onClick={retryConnection} disabled={isLoadingModels}>
+                <RefreshCw className="mr-1 h-3.5 w-3.5" /> Retry
+              </Button>
+              <div className="flex items-start gap-1 text-red-600 text-sm">
+                <XCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>{fetchError}</span>
+              </div>
             </div>
           )}
           {connectionError && (
@@ -331,10 +352,33 @@ function AiSettings() {
           )}
         </div>
       </div>
+      {PROVIDER_REGISTRY[selectedModel.provider]?.category === "subscription" && (
+        <div>
+          <Label className="my-4" htmlFor="ai-effort">Effort level</Label>
+          <Select
+            value={selectedModel.effort && effortLevels.includes(selectedModel.effort) ? selectedModel.effort : "default"}
+            onValueChange={(effort) => setSelectedModel(prev => ({ ...prev, effort: effort === "default" ? undefined : effort }))}
+            disabled={isLoadingModels || !modelValue || !effortLevels.length}
+          >
+            <SelectTrigger id="ai-effort" aria-label="Select effort level" className="w-full max-w-[320px]">
+              <SelectValue placeholder="Default" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="default">{selectedInfo?.defaultEffort ? `Default (${effortLabel(selectedInfo.defaultEffort)})` : "Default"}</SelectItem>
+              {effortLevels.map(effort => <SelectItem key={effort} value={effort}>{effortLabel(effort)}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {modelValue && !isLoadingModels && !effortLevels.length
+              ? "This model does not support an adjustable effort level."
+              : "Higher effort can take longer and use more of your subscription allowance."}
+          </p>
+        </div>
+      )}
       <Button
         className="mt-4"
         onClick={saveModelSettings}
-        disabled={!selectedModel.model || isLoadingModels || isSaving}
+        disabled={!modelValue || isLoadingModels || isSaving}
       >
         {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
         Save

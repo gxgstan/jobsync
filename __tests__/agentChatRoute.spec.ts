@@ -323,7 +323,13 @@ describe("POST /api/ai/chat", () => {
 
   it("uses the configured model exactly as configured", async () => {
     await POST(req({ messages: [pasteMessage("posting")] }));
-    expect(getModel).toHaveBeenCalledWith("ollama", "qwen3.5:9b", "user-1");
+    expect(getModel).toHaveBeenCalledWith("ollama", "qwen3.5:9b", "user-1", undefined);
+  });
+
+  it("passes the saved subscription model and effort to generation", async () => {
+    (getUserSettings as any).mockResolvedValue({ success: true, data: { settings: { ai: { provider: "codex", model: "model-a", effort: "high" } } } });
+    await POST(req({ messages: [pasteMessage("posting")] }));
+    expect(getModel).toHaveBeenCalledWith("codex", "model-a", "user-1", "high");
   });
 
   it("sends at most AGENT_CHAT_HISTORY_MESSAGES to the model", async () => {

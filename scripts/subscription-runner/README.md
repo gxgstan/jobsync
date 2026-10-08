@@ -36,7 +36,22 @@ Reconnect an expired account through its normal Tinyboy/Orca login flow. Avoid
 changing `ENCRYPTION_KEY` after storing API credentials in JobSync.
 
 The stack defaults to the Codex account's configured model (`default`). Claude
-Code's supported subscription aliases appear under Settings > AI Settings.
+Code's models and Codex's selectable models appear under Settings > AI Settings.
+Model discovery uses Codex's read-only `model/list` and `config/read` RPCs, and
+Claude Code's initialization metadata. It never starts an inference turn or
+changes the account configuration. Catalogues are cached for five minutes and
+invalidated when the account files change; Retry forces a refresh.
+
+Each model exposes the effort levels reported by its CLI. Selecting a new model
+or provider resets effort to Default. Saved effort is applied to assistant chat,
+resume import and automated matching: Claude receives `--effort`; Codex receives
+`--model` and `model_reasoning_effort` for that request. The Tinyboy default keeps
+its shared model and effort unless you choose an override. Explicit Codex models
+use their own catalogue default when Default effort is selected. The runner
+rejects unavailable models and unsupported effort combinations before inference.
+CLI model catalogues describe selectable models; actual access and usage limits
+are still enforced by each subscription when a request runs.
+
 `SINGLE_USER_MODE=true` closes sign-up after the first personal account is created.
 
 Development uses Node 24 (`nvm use`), `npm ci`, `npx prisma generate` and an ignored
@@ -52,4 +67,8 @@ requires reverting its schema.
 
 The synthetic live smoke test is available inside the app container as
 `node /app/subscription-smoke.mjs`. It verifies proposals from both subscriptions
-and never saves application data.
+using an explicit model and effort, checks their model catalogues, and never saves
+application data.
+
+References: [Codex app-server](https://learn.chatgpt.com/docs/app-server) and
+[Claude Code effort](https://code.claude.com/docs/en/model-config#adjust-effort-level).

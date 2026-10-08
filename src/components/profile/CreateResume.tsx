@@ -109,6 +109,7 @@ function CreateResume({
           const model: AiModel = {
             provider: ai.provider || defaultModel.provider,
             model: ai.model,
+            effort: ai.effort,
           };
           setSelectedModel(model);
 

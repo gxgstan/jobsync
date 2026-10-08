@@ -119,6 +119,7 @@ export const POST = async (req: NextRequest) => {
       selectedModel.provider,
       selectedModel.model,
       userId,
+      selectedModel.effort,
     );
 
     const controller = new AbortController();

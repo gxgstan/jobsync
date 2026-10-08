@@ -82,7 +82,7 @@ export async function analyzeDiscoveredJob(jobId: string): Promise<{
       return { success: false, message: "Failed to prepare match inputs" };
     }
 
-    const model = await getModel(ai.provider, ai.model || "llama3.2", user.id);
+    const model = await getModel(ai.provider, ai.model || "llama3.2", user.id, ai.effort);
 
     const promptText = buildJobMatchPrompt(
       resumePre.data.normalizedText,

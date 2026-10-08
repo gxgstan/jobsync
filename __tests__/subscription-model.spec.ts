@@ -64,6 +64,13 @@ describe("subscription provider with the actual AI SDK", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it.each(["codex", "claude-code"] as const)("sends the chosen %s model and effort to the runner", async provider => {
+    const fetchMock = vi.fn(async (_url: unknown, _options?: RequestInit) => Response.json({ text: "OK", toolCalls: [] }));
+    vi.stubGlobal("fetch", fetchMock);
+    await generateText({ model: createSubscriptionModel(provider, "model-a", "high"), prompt: "Hello" });
+    expect(JSON.parse(fetchMock.mock.calls[0][1]?.body as string)).toMatchObject({ provider, model: "model-a", effort: "high" });
+  });
+
   it("passes cancellation to the private runner", async () => {
     const controller = new AbortController();
     const fetchMock = vi.fn((_url, options: RequestInit) => new Promise<Response>((_resolve, reject) => {
