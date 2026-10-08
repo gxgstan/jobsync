@@ -158,7 +158,14 @@ export async function runCli(request, signal) {
       });
     }
     const outputFile = join(dir, 'response.txt');
-    const args = ['exec', '--skip-git-repo-check', '--json', '--ephemeral', '--sandbox', 'read-only', '-c', 'approval_policy="never"', '-c', 'features.shell_tool=false', '-c', 'features.unified_exec=false', '-c', 'features.multi_agent=false', '-c', 'features.multi_agent_v2=false', '-c', 'features.plugins=false', '-c', 'features.image_generation=false', '-c', 'features.shell_snapshot=false', '-c', 'web_search="disabled"', '-c', 'mcp_servers={}', '--output-last-message', outputFile];
+    const args = ['exec', '--skip-git-repo-check', '--json', '--ephemeral', '--sandbox', 'read-only', '--output-last-message', outputFile];
+    for (const config of [
+      'approval_policy="never"', 'features.hooks=false', 'features.apps=false',
+      'features.shell_tool=false', 'features.unified_exec=false',
+      'features.multi_agent=false', 'features.multi_agent_v2=false',
+      'features.plugins=false', 'features.image_generation=false',
+      'features.shell_snapshot=false', 'web_search="disabled"', 'mcp_servers={}',
+    ]) args.push('-c', config);
     if (schema) {
       const schemaFile = join(dir, 'schema.json');
       await writeFile(schemaFile, JSON.stringify(schema), { mode: 0o600 });
@@ -230,7 +237,7 @@ export function runnerServer({ token, execute = runCli, ready = accountReady, ti
       const status = error?.name === 'TimeoutError' ? 504 : error instanceof RunnerError ? error.status : 502;
       // Only fixed protocol messages cross the wire. Never log prompts, CLI output or credentials.
       send(status, { error: error instanceof RunnerError ? error.message : status === 504 ? 'The subscription request timed out.' : 'The subscription request failed.' });
-      if (!abort.signal.aborted) console.error(JSON.stringify({ event: 'runner_error', status }));
+      if (!abort.signal.aborted) console.error(JSON.stringify({ event: 'runner_error', status, category: error instanceof RunnerError ? error.message : error?.name, code: error?.code }));
     }
   });
 }

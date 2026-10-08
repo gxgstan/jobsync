@@ -17,7 +17,10 @@ for (const [provider, model] of [['codex', 'default'], ['claude-code', 'sonnet']
     }),
     signal: AbortSignal.timeout(180_000),
   });
-  if (!response.ok) throw new Error(`${provider} smoke request failed (HTTP ${response.status}).`);
+  if (!response.ok) {
+    const detail = await response.json().catch(() => ({}));
+    throw new Error(`${provider} smoke request failed (HTTP ${response.status}): ${detail.error ?? 'runner unavailable'}`);
+  }
   const data = await response.json();
   const proposal = data.toolCalls?.find(call => call.name === 'test_proposal');
   if (!proposal) throw new Error(`${provider} returned no proposal.`);

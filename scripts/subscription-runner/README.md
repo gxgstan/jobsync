@@ -6,11 +6,12 @@ private to the Compose network and requires `SUBSCRIPTION_RUNNER_TOKEN` for mode
 discovery and generation. JobSync never receives the subscription OAuth tokens.
 
 Claude Code runs without native tools, hooks, skills or MCP servers. Codex runs
-with a read-only sandbox and shell, execution, web search, plugins, image
+with a read-only sandbox and hooks, connected apps, shell, execution, web search, plugins, image
 generation and additional agents disabled. CLI input is passed on stdin with
 fixed argument arrays. Each subscription processes one request at a time, with
 four waiting slots, cancellation, an output limit and a three-minute deadline.
 There is no fallback to paid API authentication.
+The runner installs system CA certificates for the Codex CLI's HTTPS connections.
 
 Application functions are encoded as structured proposals. The Vercel AI SDK
 validates arguments, executes read tools and renders its existing approval cards
